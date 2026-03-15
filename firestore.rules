@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - email: string (required, immutable)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional)
+    //   - xp: number (required)
+    //   - streak: number (required)
+    //   - hearts: number (required)
+    //   - maxHearts: number (required)
+    //   - gems: number (required)
+    //   - lastPlayedDate: string (optional)
+    //   - completedLessons: list (optional)
+    //   - currentLanguage: string (required)
+    //   - role: string (required, immutable for non-admins)
+    //
+    // Collection: users_public
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - displayName: string (required)
+    //   - photoURL: string (optional)
+    //   - xp: number (optional)
+    //
+    // Collection: friendships
+    // Document ID: {friendshipId}
+    // Fields:
+    //   - user1Id: string (required, immutable)
+    //   - user2Id: string (required, immutable)
+    //   - status: string (required)
+    //   - createdAt: string (required, immutable)
+    //
+    // Collection: duels
+    // Document ID: {duelId}
+    // Fields:
+    //   - player1Id: string (required, immutable)
+    //   - player2Id: string (required, immutable)
+    //   - status: string (required)
+    //   - winnerId: string (optional)
+    //   - language: string (required, immutable)
+    //   - challenge: map (required, immutable)
+    //   - player1Progress: number (required)
+    //   - player2Progress: number (required)
+    //   - createdAt: string (required, immutable)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "gaba12600@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'xp', 'streak', 'hearts', 'maxHearts', 'gems', 'lastPlayedDate', 'completedLessons', 'currentLanguage', 'role']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.email is string && isValidEmail(data.email) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2048)) &&
+             data.xp is number && data.xp >= 0 &&
+             data.streak is number && data.streak >= 0 &&
+             data.hearts is number && data.hearts >= 0 &&
+             data.maxHearts is number && data.maxHearts >= 0 &&
+             data.gems is number && data.gems >= 0 &&
+             (!('lastPlayedDate' in data) || (data.lastPlayedDate is string && data.lastPlayedDate.size() <= 30)) &&
+             (!('completedLessons' in data) || (data.completedLessons is list && data.completedLessons.size() <= 10000)) &&
+             data.currentLanguage is string && data.currentLanguage.size() > 0 && data.currentLanguage.size() <= 50 &&
+             data.role in ['admin', 'user'];
+    }
+
+    function isValidUserPublic(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'xp']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2048)) &&
+             (!('xp' in data) || (data.xp is number && data.xp >= 0));
+    }
+
+    function isValidFriendship(data) {
+      return hasOnlyAllowedFields(['user1Id', 'user2Id', 'status', 'createdAt']) &&
+             data.user1Id is string && data.user1Id.size() > 0 && data.user1Id.size() < 128 &&
+             data.user2Id is string && data.user2Id.size() > 0 && data.user2Id.size() < 128 &&
+             data.status in ['pending', 'accepted'] &&
+             data.createdAt is string && data.createdAt.size() <= 30;
+    }
+
+    function isValidDuel(data) {
+      return hasOnlyAllowedFields(['player1Id', 'player2Id', 'status', 'winnerId', 'language', 'challenge', 'player1Progress', 'player2Progress', 'createdAt']) &&
+             data.player1Id is string && data.player1Id.size() > 0 && data.player1Id.size() < 128 &&
+             data.player2Id is string && data.player2Id.size() > 0 && data.player2Id.size() < 128 &&
+             data.status in ['waiting', 'in_progress', 'finished'] &&
+             (!('winnerId' in data) || (data.winnerId is string && data.winnerId.size() <= 128)) &&
+             data.language is string && data.language.size() > 0 && data.language.size() <= 50 &&
+             data.challenge is map &&
+             data.player1Progress is number && data.player1Progress >= 0 && data.player1Progress <= 100 &&
+             data.player2Progress is number && data.player2Progress >= 0 && data.player2Progress <= 100 &&
+             data.createdAt is string && data.createdAt.size() <= 30;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function emailNotModified() {
+      return !('email' in request.resource.data) || request.resource.data.email == resource.data.email;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged() && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() && emailNotModified() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /users_public/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUserPublic(request.resource.data) && uidUnchanged();
+      allow update: if isOwner(userId) && isValidUserPublic(request.resource.data) && uidNotModified();
+      allow delete: if isAdmin();
+    }
+
+    match /friendships/{friendshipId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.user1Id || request.auth.uid == resource.data.user2Id || isAdmin());
+      allow create: if isAuthenticated() && isValidFriendship(request.resource.data) && (request.auth.uid == request.resource.data.user1Id || request.auth.uid == request.resource.data.user2Id);
+      allow update: if isAuthenticated() && isValidFriendship(request.resource.data) && 
+        (request.auth.uid == resource.data.user1Id || request.auth.uid == resource.data.user2Id) &&
+        request.resource.data.user1Id == resource.data.user1Id &&
+        request.resource.data.user2Id == resource.data.user2Id &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.user1Id || request.auth.uid == resource.data.user2Id || isAdmin());
+    }
+
+    match /duels/{duelId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.player1Id || request.auth.uid == resource.data.player2Id || isAdmin());
+      allow create: if isAuthenticated() && isValidDuel(request.resource.data) && (request.auth.uid == request.resource.data.player1Id || request.auth.uid == request.resource.data.player2Id);
+      allow update: if isAuthenticated() && isValidDuel(request.resource.data) && 
+        (request.auth.uid == resource.data.player1Id || request.auth.uid == resource.data.player2Id) &&
+        request.resource.data.player1Id == resource.data.player1Id &&
+        request.resource.data.player2Id == resource.data.player2Id &&
+        request.resource.data.language == resource.data.language &&
+        request.resource.data.challenge == resource.data.challenge &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+  }
+}

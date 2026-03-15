@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and progress data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID from Firebase Auth" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "xp": { "type": "number" },
+        "streak": { "type": "number" },
+        "hearts": { "type": "number" },
+        "maxHearts": { "type": "number" },
+        "gems": { "type": "number" },
+        "lastPlayedDate": { "type": "string" },
+        "completedLessons": { "type": "array", "items": { "type": "string" } },
+        "currentLanguage": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["uid", "email", "xp", "streak", "hearts", "maxHearts", "gems", "currentLanguage", "role"]
+    },
+    "UserPublic": {
+      "title": "User Public Profile",
+      "description": "Publicly visible user data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "xp": { "type": "number" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "A friendship relationship between two users",
+      "type": "object",
+      "properties": {
+        "user1Id": { "type": "string" },
+        "user2Id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user1Id", "user2Id", "status", "createdAt"]
+    },
+    "Duel": {
+      "title": "Duel",
+      "description": "A real-time code duel between two users",
+      "type": "object",
+      "properties": {
+        "player1Id": { "type": "string" },
+        "player2Id": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "in_progress", "finished"] },
+        "winnerId": { "type": "string" },
+        "language": { "type": "string" },
+        "challenge": { "type": "object" },
+        "player1Progress": { "type": "number" },
+        "player2Progress": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["player1Id", "player2Id", "status", "language", "player1Progress", "player2Progress", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User progress and profile data"
+    },
+    "/users_public/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public user data"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friendship records"
+    },
+    "/duels/{duelId}": {
+      "schema": { "$ref": "#/entities/Duel" },
+      "description": "Real-time duel sessions"
+    }
+  }
+}
